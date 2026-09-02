@@ -1,0 +1,35 @@
+name: Update PVPC prices
+
+on:
+  schedule:
+    # 07:00 y 13:00 UTC: refresca precios de "hoy" por si acaso.
+    # 18:35 y 19:15 UTC: intenta obtener los precios de "mañana" (publicados ~18:15-18:30 UTC en verano).
+    - cron: "0 7 * * *"
+    - cron: "0 13 * * *"
+    - cron: "35 18 * * *"
+    - cron: "15 19 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  update-prices:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Descargar precios
+        run: python fetch_prices.py
+
+      - name: Publicar cambios
+        run: |
+          git config user.name "pvpc-bot"
+          git config user.email "pvpc-bot@users.noreply.github.com"
+          git add docs/prices.json
+          git diff --cached --quiet || git commit -m "Actualiza precios PVPC"
+          git push
