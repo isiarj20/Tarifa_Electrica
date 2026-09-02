@@ -122,6 +122,8 @@ function renderCurve(timeline, nowAbs){
   }
 }
 
+const LOOKAHEAD_HOURS = 12; // ventana móvil desde el momento de la consulta
+
 async function load(){
   let data;
   try{
@@ -134,18 +136,21 @@ async function load(){
 
   const now = new Date();
   const nowHour = now.getHours();
+  const cutoffAbs = nowHour + LOOKAHEAD_HOURS; // p.ej. consulta a las 20h -> corta a las 08h del día siguiente
 
-  // Construye la línea temporal: horas restantes de hoy + mañana completo si está disponible.
+  // Construye la línea temporal: horas restantes de hoy + mañana, pero SOLO
+  // dentro de las próximas LOOKAHEAD_HOURS horas (nunca "espera al día siguiente entero").
   const timeline = [];
   if (data.today && data.today.prices){
     for (const p of data.today.prices){
-      if (p.hour >= nowHour) timeline.push({ abs: p.hour, price: p.price });
+      if (p.hour >= nowHour && p.hour < cutoffAbs) timeline.push({ abs: p.hour, price: p.price });
     }
   }
   const tomorrowAvailable = !!(data.tomorrow && data.tomorrow.prices);
   if (tomorrowAvailable){
     for (const p of data.tomorrow.prices){
-      timeline.push({ abs: p.hour + 24, price: p.price });
+      const abs = p.hour + 24;
+      if (abs < cutoffAbs) timeline.push({ abs, price: p.price });
     }
   }
 
@@ -154,45 +159,49 @@ async function load(){
   document.getElementById('nowPrice').innerHTML =
     (nowEntry ? nowEntry.price.toFixed(3) : '—') + ' <small>€/kWh ahora</small>';
   document.getElementById('updated').textContent =
-    'Actualizado: ' + new Date(data.generated_at).toLocaleString('es-ES');
+    'Actualizado: ' + new Date(data.generated_at).toLocaleString('es-ES') + ` · próximas ${LOOKAHEAD_HOURS}h`;
 
   renderCurve(timeline, nowHour);
 
   const statusEl = document.getElementById('tomorrowStatus');
+  const needsTomorrowData = cutoffAbs > 24; // la ventana de 12h se mete en el día siguiente
   if (tomorrowAvailable){
-    statusEl.textContent = `Precios de mañana (${data.tomorrow.date}) ya publicados — el cálculo tiene en cuenta ambos días.`;
-  } else {
+    statusEl.textContent = `Precios de mañana (${data.tomorrow.date}) ya publicados — el cálculo cubre toda la ventana de las próximas ${LOOKAHEAD_HOURS}h.`;
+  } else if (needsTomorrowData) {
     statusEl.className = 'status warn';
-    statusEl.textContent = 'Precios de mañana aún no publicados (suelen salir sobre las 20:30). El cálculo de momento solo usa lo que queda de hoy.';
+    statusEl.textContent = `Precios de mañana aún no publicados (suelen salir sobre las 20:30). Por ahora el cálculo solo cubre hasta la medianoche de hoy.`;
+  } else {
+    statusEl.textContent = `La ventana de las próximas ${LOOKAHEAD_HOURS}h cabe entera dentro de hoy.`;
   }
 
   const cardsEl = document.getElementById('cards');
   cardsEl.innerHTML = '';
 
   for (const app of APPLIANCES){
+    if (timeline.length < app.hours) continue;
+
     const overall = bestWindow(timeline, app.hours);
     if (!overall) continue;
 
+    // "Ponerlo ya" = la ventana que empieza en el instante actual.
+    const rightNowSlice = timeline.slice(0, app.hours);
+    const rightNowAvg = rightNowSlice.reduce((s,p)=>s+p.price,0) / app.hours;
+
     const start = fmtHour(overall.startAbs);
     const end = fmtHour(overall.endAbs);
-    const isTomorrow = start.day === 1;
-
-    // Compara con la mejor opción posible solo dentro de lo que queda de hoy,
-    // para poder avisar si merece la pena esperar a mañana.
-    const todayOnlyTimeline = timeline.filter(p => p.abs < 24);
-    const todayBest = bestWindow(todayOnlyTimeline, app.hours);
-    const worthWaiting = tomorrowAvailable && todayBest && isTomorrow &&
-      (todayBest.avg - overall.avg) / todayBest.avg > 0.05;
+    const startsNow = overall.startAbs === timeline[0].abs;
+    const savingPct = Math.round((rightNowAvg - overall.avg) / rightNowAvg * 100);
+    const worthWaiting = !startsNow && savingPct > 5;
 
     const card = document.createElement('div');
     card.className = 'card' + (worthWaiting ? ' tomorrow-better' : '');
     card.innerHTML = `
       <div class="label">${app.name}</div>
       <div class="window">
-        ${isTomorrow ? '<span class="day-tag">MAÑANA</span>' : ''}${start.label} – ${end.label}${end.day > start.day && !isTomorrow ? ' <span class="day-tag" style="margin-left:6px;">→ MAÑANA</span>' : ''}
+        ${startsNow ? 'AHORA' : `${start.day > 0 ? '<span class="day-tag">MAÑANA</span>' : ''}${start.label} – ${end.label}`}
       </div>
-      <div class="meta">media ${overall.avg.toFixed(3)} €/kWh</div>
-      ${worthWaiting ? `<div class="hint">Esperar a mañana sale ~${Math.round((todayBest.avg-overall.avg)/todayBest.avg*100)}% más barato que la mejor opción de hoy</div>` : ''}
+      <div class="meta">media ${overall.avg.toFixed(3)} €/kWh${startsNow ? '' : ` · ahora mismo ${rightNowAvg.toFixed(3)} €/kWh`}</div>
+      ${worthWaiting ? `<div class="hint">Esperar a ${start.label}${start.day>0?' de mañana':''} sale ~${savingPct}% más barato que ponerlo ya</div>` : (startsNow ? '<div class="hint" style="color:var(--text-dim);">Ya es la mejor opción dentro de las próximas ' + LOOKAHEAD_HOURS + 'h — ponlo ya</div>' : '')}
     `;
     cardsEl.appendChild(card);
   }
