@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Precio luz</title>
+<style>
+  :root{
+    --bg: #14161b;
+    --bg-card: #1b1e25;
+    --line: #2a2e37;
+    --text: #eceff2;
+    --text-dim: #8b909c;
+    --amber: #f0b429;
+    --amber-dim: #7a5d1e;
+    --red: #e35d5d;
+    --mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, Menlo, monospace;
+    --sans: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html,body{ margin:0; padding:0; background:var(--bg); color:var(--text); font-family:var(--sans); }
+  body{
+    min-height:100vh;
+    padding: max(20px, env(safe-area-inset-top)) 18px max(20px, env(safe-area-inset-bottom));
+    display:flex; flex-direction:column; gap:16px;
+  }
+  header{ display:flex; flex-direction:column; gap:4px; padding: 4px 2px 8px; }
+  .eyebrow{ font-size:13px; color:var(--text-dim); letter-spacing:.02em; }
+  .now-price{ font-family:var(--mono); font-size:40px; font-weight:600; line-height:1.1; color:var(--amber); }
+  .now-price small{ font-size:16px; color:var(--text-dim); font-weight:500; margin-left:6px; }
+  .updated{ font-size:12px; color:var(--text-dim); }
+
+  .status{
+    font-size:13px; color:var(--text-dim); background:var(--bg-card);
+    border:1px solid var(--line); border-radius:10px; padding:10px 12px;
+  }
+  .status.warn{ color:#f0d29a; border-color:var(--amber-dim); }
+
+  .curve{ display:flex; align-items:flex-end; gap:2px; height:44px; margin-top:6px; }
+  .curve i{ flex:1; background:var(--line); border-radius:2px 2px 0 0; display:block; }
+  .curve i.now{ background:var(--amber); }
+
+  section.cards{ display:flex; flex-direction:column; gap:10px; }
+  .card{
+    background:var(--bg-card); border:1px solid var(--line); border-radius:14px;
+    padding:16px 16px 14px; display:flex; flex-direction:column; gap:6px;
+  }
+  .card .label{ font-size:13px; color:var(--text-dim); }
+  .card .window{ font-family:var(--mono); font-size:26px; font-weight:600; letter-spacing:-.01em; }
+  .card .window .day-tag{
+    font-family:var(--sans); font-size:11px; font-weight:700; letter-spacing:.03em;
+    color:var(--bg); background:var(--amber); border-radius:5px; padding:2px 6px; margin-right:8px; vertical-align:2px;
+  }
+  .card .meta{ font-size:12px; color:var(--text-dim); font-family:var(--mono); }
+  .card.tomorrow-better{ border-color:var(--amber-dim); }
+  .hint{ font-size:12px; color:var(--amber); }
+
+  footer{ margin-top:auto; padding-top:8px; font-size:11px; color:var(--text-dim); text-align:center; }
+  .error{ color:var(--red); font-size:14px; padding:20px 4px; }
+</style>
+</head>
+<body>
+
+  <header>
+    <div class="eyebrow">Precio de la luz · PVPC 2.0TD</div>
+    <div class="now-price" id="nowPrice">— <small>€/kWh ahora</small></div>
+    <div class="curve" id="curve"></div>
+    <div class="updated" id="updated"></div>
+  </header>
+
+  <div class="status" id="tomorrowStatus"></div>
+
+  <section class="cards" id="cards">
+    <div class="label" style="padding:10px 2px;color:var(--text-dim);">Cargando…</div>
+  </section>
+
+  <footer>Datos: Red Eléctrica de España (REE) · se actualiza varias veces al día</footer>
+
+<script>
+const APPLIANCES = [
+  { key: 'lavaplatos', name: 'Lavaplatos', hours: 4 },
+  { key: 'lavadora',   name: 'Lavadora',   hours: 1 },
+  { key: 'secadora',   name: 'Secadora (normal, 2h30)', hours: 3 },
+  { key: 'secadora_d', name: 'Secadora (delicados, 1h)', hours: 1 },
+];
+
+function fmtHour(h){
+  const day = Math.floor(h/24);
+  const hh = h % 24;
+  return { label: `${String(hh).padStart(2,'0')}:00`, day };
+}
+
+// Encuentra la ventana contigua de N horas con menor precio medio,
+// solo dentro de las horas realmente disponibles (respeta el orden temporal).
+function bestWindow(timeline, hours){
+  if (timeline.length < hours) return null;
+  let best = null;
+  for (let start = 0; start <= timeline.length - hours; start++){
+    const slice = timeline.slice(start, start + hours);
+    const avg = slice.reduce((s,p)=>s+p.price,0) / hours;
+    if (!best || avg < best.avg) best = { startIdx: start, avg };
+  }
+  const startAbs = timeline[best.startIdx].abs;
+  const endAbs = startAbs + hours;
+  return { startAbs, endAbs, avg: best.avg };
+}
+
+function renderCurve(timeline, nowAbs){
+  const el = document.getElementById('curve');
+  el.innerHTML = '';
+  const todayOnly = timeline.filter(p => p.abs < 24);
+  if (todayOnly.length === 0) return;
+  const max = Math.max(...timeline.map(p=>p.price));
+  const min = Math.min(...timeline.map(p=>p.price));
+  const range = (max - min) || 1;
+  for (const p of todayOnly){
+    const bar = document.createElement('i');
+    const h = 8 + ((p.price - min) / range) * 36;
+    bar.style.height = h + 'px';
+    if (p.abs === nowAbs) bar.className = 'now';
+    el.appendChild(bar);
+  }
+}
+
+async function load(){
+  let data;
+  try{
+    const res = await fetch('prices.json', { cache: 'no-store' });
+    data = await res.json();
+  }catch(e){
+    document.getElementById('cards').innerHTML = '<div class="error">No se han podido cargar los precios (prices.json). Comprueba que el workflow de GitHub Actions se ha ejecutado.</div>';
+    return;
+  }
+
+  const now = new Date();
+  const nowHour = now.getHours();
+
+  // Construye la línea temporal: horas restantes de hoy + mañana completo si está disponible.
+  const timeline = [];
+  if (data.today && data.today.prices){
+    for (const p of data.today.prices){
+      if (p.hour >= nowHour) timeline.push({ abs: p.hour, price: p.price });
+    }
+  }
+  const tomorrowAvailable = !!(data.tomorrow && data.tomorrow.prices);
+  if (tomorrowAvailable){
+    for (const p of data.tomorrow.prices){
+      timeline.push({ abs: p.hour + 24, price: p.price });
+    }
+  }
+
+  // Precio actual
+  const nowEntry = (data.today?.prices || []).find(p => p.hour === nowHour);
+  document.getElementById('nowPrice').innerHTML =
+    (nowEntry ? nowEntry.price.toFixed(3) : '—') + ' <small>€/kWh ahora</small>';
+  document.getElementById('updated').textContent =
+    'Actualizado: ' + new Date(data.generated_at).toLocaleString('es-ES');
+
+  renderCurve(timeline, nowHour);
+
+  const statusEl = document.getElementById('tomorrowStatus');
+  if (tomorrowAvailable){
+    statusEl.textContent = `Precios de mañana (${data.tomorrow.date}) ya publicados — el cálculo tiene en cuenta ambos días.`;
+  } else {
+    statusEl.className = 'status warn';
+    statusEl.textContent = 'Precios de mañana aún no publicados (suelen salir sobre las 20:30). El cálculo de momento solo usa lo que queda de hoy.';
+  }
+
+  const cardsEl = document.getElementById('cards');
+  cardsEl.innerHTML = '';
+
+  for (const app of APPLIANCES){
+    const overall = bestWindow(timeline, app.hours);
+    if (!overall) continue;
+
+    const start = fmtHour(overall.startAbs);
+    const end = fmtHour(overall.endAbs);
+    const isTomorrow = start.day === 1;
+
+    // Compara con la mejor opción posible solo dentro de lo que queda de hoy,
+    // para poder avisar si merece la pena esperar a mañana.
+    const todayOnlyTimeline = timeline.filter(p => p.abs < 24);
+    const todayBest = bestWindow(todayOnlyTimeline, app.hours);
+    const worthWaiting = tomorrowAvailable && todayBest && isTomorrow &&
+      (todayBest.avg - overall.avg) / todayBest.avg > 0.05;
+
+    const card = document.createElement('div');
+    card.className = 'card' + (worthWaiting ? ' tomorrow-better' : '');
+    card.innerHTML = `
+      <div class="label">${app.name}</div>
+      <div class="window">
+        ${isTomorrow ? '<span class="day-tag">MAÑANA</span>' : ''}${start.label} – ${end.label}${end.day > start.day && !isTomorrow ? ' <span class="day-tag" style="margin-left:6px;">→ MAÑANA</span>' : ''}
+      </div>
+      <div class="meta">media ${overall.avg.toFixed(3)} €/kWh</div>
+      ${worthWaiting ? `<div class="hint">Esperar a mañana sale ~${Math.round((todayBest.avg-overall.avg)/todayBest.avg*100)}% más barato que la mejor opción de hoy</div>` : ''}
+    `;
+    cardsEl.appendChild(card);
+  }
+}
+
+load();
+</script>
+</body>
+</html>
