@@ -7,6 +7,7 @@ API pública de REE y los guarda en docs/prices.json para que la página estáti
 
 import os
 import json
+import time
 from datetime import datetime, timedelta, timezone
 import urllib.request
 import urllib.parse
@@ -16,7 +17,7 @@ REE_URL = "https://apidatos.ree.es/es/datos/mercados/precios-mercados-tiempo-rea
 OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "docs", "prices.json")
 
 
-def fetch_prices_for_date(date_str: str):
+def fetch_prices_for_date(date_str: str, retries: int = 2, backoff_seconds: int = 15):
     start = f"{date_str}T00:00"
     end = f"{date_str}T23:59"
     params = {
@@ -31,20 +32,38 @@ def fetch_prices_for_date(date_str: str):
         headers={
             "Accept": "application/json; application/vnd.esios-api-v1+json",
             "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (pvpc-widget script)",
         },
     )
-    with urllib.request.urlopen(req, timeout=20) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
+
+    last_error = None
+    for attempt in range(retries + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            break
+        except Exception as e:
+            last_error = e
+            if attempt < retries:
+                print(f"Aviso: fallo al pedir {date_str} (intento {attempt + 1}): {e}. Reintentando...")
+                time.sleep(backoff_seconds)
+            else:
+                print(f"Aviso: no se pudieron obtener los precios de {date_str} tras {retries + 1} intentos: {e}")
+                return None
+    else:
+        return None
 
     pvpc_block = next(
         (b for b in data.get("included", []) if b.get("type", "").startswith("PVPC")),
         None,
     )
     if not pvpc_block:
+        print(f"Aviso: {date_str} sin bloque PVPC todavía (probablemente no publicado aún).")
         return None
 
     values = pvpc_block["attributes"]["values"]
     if len(values) < 20:
+        print(f"Aviso: {date_str} con datos incompletos ({len(values)} horas), no publicado aún.")
         return None  # datos incompletos / no publicados aún
 
     prices = []
