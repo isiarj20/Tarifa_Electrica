@@ -14,7 +14,7 @@ import urllib.parse
 
 MADRID_TZ = timezone(timedelta(hours=2))  # ajustar a +1 en horario de invierno
 REE_URL = "https://apidatos.ree.es/es/datos/mercados/precios-mercados-tiempo-real"
-OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "docs", "prices.json")
+OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "prices.json")
 
 
 def fetch_prices_for_date(date_str: str, retries: int = 2, backoff_seconds: int = 15):
