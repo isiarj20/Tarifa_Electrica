@@ -8,7 +8,7 @@ API pública de REE y los guarda en docs/prices.json para que la página estáti
 import os
 import json
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import urllib.request
 import urllib.parse
