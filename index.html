@@ -127,7 +127,7 @@ const LOOKAHEAD_HOURS = 12; // ventana móvil desde el momento de la consulta
 async function load(){
   let data;
   try{
-    const res = await fetch('prices.json', { cache: 'no-store' });
+    const res = await fetch('prices.json?t=' + Date.now(), { cache: 'no-store' });
     data = await res.json();
   }catch(e){
     document.getElementById('cards').innerHTML = '<div class="error">No se han podido cargar los precios (prices.json). Comprueba que el workflow de GitHub Actions se ha ejecutado.</div>';
