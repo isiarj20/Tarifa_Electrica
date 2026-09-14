@@ -9,10 +9,11 @@ import os
 import json
 import time
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 import urllib.request
 import urllib.parse
 
-MADRID_TZ = timezone(timedelta(hours=2))  # ajustar a +1 en horario de invierno
+MADRID_TZ = ZoneInfo("Europe/Madrid")  # ajustar a +1 en horario de invierno
 REE_URL = "https://apidatos.ree.es/es/datos/mercados/precios-mercados-tiempo-real"
 OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "prices.json")
 
