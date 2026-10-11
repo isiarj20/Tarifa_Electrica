@@ -1,108 +1,108 @@
 {
-  "generated_at": "2026-10-11T19:52:42.576396+02:00",
+  "generated_at": "2026-10-12T00:22:28.069994+02:00",
   "today": {
-    "date": "2026-10-11",
+    "date": "2026-10-12",
     "prices": [
       {
         "hour": 0,
-        "price": 0.221
+        "price": 0.2211
       },
       {
         "hour": 1,
-        "price": 0.225
+        "price": 0.2281
       },
       {
         "hour": 2,
-        "price": 0.2254
+        "price": 0.2185
       },
       {
         "hour": 3,
-        "price": 0.2246
+        "price": 0.2168
       },
       {
         "hour": 4,
-        "price": 0.2262
+        "price": 0.2178
       },
       {
         "hour": 5,
-        "price": 0.2258
+        "price": 0.2066
       },
       {
         "hour": 6,
-        "price": 0.2248
+        "price": 0.2254
       },
       {
         "hour": 7,
-        "price": 0.2298
+        "price": 0.2677
       },
       {
         "hour": 8,
-        "price": 0.2307
+        "price": 0.2729
       },
       {
         "hour": 9,
-        "price": 0.1666
+        "price": 0.2051
       },
       {
         "hour": 10,
-        "price": 0.0942
+        "price": 0.0685
       },
       {
         "hour": 11,
-        "price": 0.0287
+        "price": -0.0057
       },
       {
         "hour": 12,
-        "price": -0.0005
+        "price": -0.0109
       },
       {
         "hour": 13,
-        "price": 0.0001
+        "price": -0.0057
       },
       {
         "hour": 14,
-        "price": -0.0032
+        "price": -0.011
       },
       {
         "hour": 15,
-        "price": -0.0046
+        "price": -0.0115
       },
       {
         "hour": 16,
-        "price": -0.0015
+        "price": -0.0131
       },
       {
         "hour": 17,
-        "price": 0.0754
+        "price": 0.0399
       },
       {
         "hour": 18,
-        "price": 0.2121
+        "price": 0.2131
       },
       {
         "hour": 19,
-        "price": 0.2886
+        "price": 0.3025
       },
       {
         "hour": 20,
-        "price": 0.2849
+        "price": 0.3088
       },
       {
         "hour": 21,
-        "price": 0.2598
+        "price": 0.3025
       },
       {
         "hour": 22,
-        "price": 0.2347
+        "price": 0.2799
       },
       {
         "hour": 23,
-        "price": 0.233
+        "price": 0.2633
       }
     ]
   },
   "tomorrow": {
-    "date": "2026-10-12",
+    "date": "2026-10-13",
     "prices": null
   }
 }
