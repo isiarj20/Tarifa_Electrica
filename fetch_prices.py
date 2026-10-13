@@ -13,9 +13,24 @@ from zoneinfo import ZoneInfo
 import urllib.request
 import urllib.parse
 
-MADRID_TZ = ZoneInfo("Europe/Madrid")  # ajustar a +1 en horario de invierno
+MADRID_TZ = ZoneInfo("Europe/Madrid")
 REE_URL = "https://apidatos.ree.es/es/datos/mercados/precios-mercados-tiempo-real"
-OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "prices.json")
+OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "docs", "prices.json")
+
+
+def looks_like_placeholder(prices) -> bool:
+    """Detecta datos no fiables: REE a veces devuelve el día siguiente con
+    todas las horas en 0 (o todas idénticas) justo cuando aún está terminando
+    de publicar/validar los precios. Eso no es un día real con tarifa a 0€,
+    así que lo tratamos como 'todavía no disponible' y se reintentará más tarde."""
+    if not prices:
+        return False
+    values = [p["price"] for p in prices]
+    if all(v == 0 for v in values):
+        return True
+    if len(set(values)) == 1:
+        return True
+    return False
 
 
 def fetch_prices_for_date(date_str: str, retries: int = 2, backoff_seconds: int = 15):
@@ -65,13 +80,18 @@ def fetch_prices_for_date(date_str: str, retries: int = 2, backoff_seconds: int 
     values = pvpc_block["attributes"]["values"]
     if len(values) < 20:
         print(f"Aviso: {date_str} con datos incompletos ({len(values)} horas), no publicado aún.")
-        return None  # datos incompletos / no publicados aún
+        return None
 
     prices = []
     for v in values:
         dt = datetime.fromisoformat(v["datetime"])
         prices.append({"hour": dt.hour, "price": round(v["value"] / 1000, 4)})
     prices.sort(key=lambda x: x["hour"])
+
+    if looks_like_placeholder(prices):
+        print(f"Aviso: {date_str} parece un dato placeholder (todo a 0 o todo idéntico). Se descarta y se reintentará más tarde.")
+        return None
+
     return prices
 
 
