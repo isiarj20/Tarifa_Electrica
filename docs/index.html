@@ -15,6 +15,9 @@
     --amber-dim: #7a5d1e;
     --red: #e35d5d;
     --neon: #39ff88;
+    --good: #4ade80;
+    --mid: #facc15;
+    --bad: #f87171;
     --mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, Menlo, monospace;
     --sans: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
@@ -81,6 +84,16 @@
     font-size:13px; color:var(--text-dim);
   }
   .card .second b{ font-family:var(--mono); color:var(--text); font-weight:600; }
+  .card .second .save{ color:var(--good); font-weight:600; }
+  .card .second .cost{ color:var(--bad); font-weight:600; }
+
+  .daychart{ margin-top:12px; }
+  .daychart-head{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:2px; }
+  .daychart-cap{ font-size:12px; color:var(--text-dim); }
+  .legend{ display:flex; gap:10px; font-size:11px; color:var(--text-dim); }
+  .legend span{ display:inline-flex; align-items:center; gap:4px; }
+  .legend i{ width:8px; height:8px; border-radius:50%; display:inline-block; }
+  .daychart svg{ display:block; width:100%; height:auto; }
 
   footer{ margin-top:auto; padding-top:8px; font-size:11px; color:var(--text-dim); text-align:center; }
   .error{ color:var(--red); font-size:14px; padding:20px 4px; }
@@ -92,6 +105,7 @@
     <div class="eyebrow">Precio de la luz · PVPC 2.0TD</div>
     <div class="now-price" id="nowPrice">— <small>€/kWh ahora</small></div>
     <div class="curve" id="curve"></div>
+    <div class="daychart" id="dayChart"></div>
     <div class="updated" id="updated"></div>
   </header>
 
@@ -167,6 +181,97 @@ function bestWindow(timeline, hours, exclude){
   const startAbs = timeline[best.startIdx].abs;
   const endAbs = startAbs + hours;
   return { startAbs, endAbs, avg: best.avg };
+}
+
+const TIER_COLORS = { good:'#4ade80', mid:'#facc15', bad:'#f87171' };
+
+// Reparte las horas del día en tres tercios por orden de precio:
+// el tercio más barato (verde), el intermedio (amarillo) y el más caro (rojo).
+function priceTiers(prices){
+  const n = prices.length;
+  const order = prices.map((p, i) => ({ i, price: p.price }))
+                      .sort((a, b) => a.price - b.price || a.i - b.i);
+  const tiers = new Array(n);
+  order.forEach((o, rank) => {
+    tiers[o.i] = rank < n / 3 ? 'good' : (rank < 2 * n / 3 ? 'mid' : 'bad');
+  });
+  return tiers;
+}
+
+// Línea continua con el precio de todo el día (00h-24h), coloreada por tramos de precio.
+function renderDayChart(prices, now){
+  const el = document.getElementById('dayChart');
+  if (!prices || prices.length < 2){ el.innerHTML = ''; return; }
+
+  const W = 340, H = 134, L = 42, R = 8, T = 14, B = 22;
+  const pw = W - L - R, ph = H - T - B, n = prices.length;
+  const vals = prices.map(p => p.price);
+  const hi = Math.max(...vals), lo = Math.min(...vals);
+  const range = (hi - lo) || 1;
+  const yTop = T + 4, yBot = T + ph - 4, base = T + ph;
+  const x = i => L + (i + 0.5) / n * pw;
+  const y = v => yTop + (1 - (v - lo) / range) * (yBot - yTop);
+  const tiers = priceTiers(prices);
+
+  // Degradado con cortes secos en la frontera de cada hora: cada hora lleva su color.
+  let stops = '';
+  tiers.forEach((t, i) => {
+    const a = (i / n).toFixed(4), b = ((i + 1) / n).toFixed(4);
+    stops += `<stop offset="${a}" stop-color="${TIER_COLORS[t]}"/><stop offset="${b}" stop-color="${TIER_COLORS[t]}"/>`;
+  });
+
+  const pts = prices.map((p, i) => `${x(i).toFixed(1)},${y(p.price).toFixed(1)}`);
+  const linePts = pts.join(' ');
+  const areaPath = `M${x(0).toFixed(1)},${base} L${pts.join(' L')} L${x(n - 1).toFixed(1)},${base} Z`;
+
+  // Marcas del eje horizontal: 00, 06, 12, 18, 24
+  let grid = '';
+  [0, 6, 12, 18, 24].forEach(h => {
+    const gx = (L + h / 24 * pw).toFixed(1);
+    grid += `<line x1="${gx}" y1="${T}" x2="${gx}" y2="${base}" stroke="#2a2e37" stroke-width="1"/>`;
+    grid += `<text x="${gx}" y="${H - 6}" text-anchor="middle" fill="#8b909c" font-size="10" font-family="monospace">${String(h).padStart(2, '0')}</text>`;
+  });
+
+  // Etiquetas del eje vertical: precio máximo y mínimo del día (y línea del cero si hay precios negativos)
+  let yAxis =
+    `<text x="${L - 5}" y="${(y(hi) + 3).toFixed(1)}" text-anchor="end" fill="#8b909c" font-size="10" font-family="monospace">${hi.toFixed(3)}</text>` +
+    `<text x="${L - 5}" y="${(y(lo) + 3).toFixed(1)}" text-anchor="end" fill="#8b909c" font-size="10" font-family="monospace">${lo.toFixed(3)}</text>`;
+  if (lo < 0 && hi > 0){
+    yAxis += `<line x1="${L}" y1="${y(0).toFixed(1)}" x2="${W - R}" y2="${y(0).toFixed(1)}" stroke="#8b909c" stroke-width="1" stroke-dasharray="3 3"/>` +
+             (Math.abs(y(0) - y(lo)) >= 12   // si el 0 queda pegado al mínimo, no se pinta su etiqueta para que no se pisen
+               ? `<text x="${L - 5}" y="${(y(0) + 3).toFixed(1)}" text-anchor="end" fill="#8b909c" font-size="10" font-family="monospace">0</text>`
+               : '');
+  }
+
+  // Ahora: horas pasadas atenuadas, línea vertical y punto sobre la curva
+  const hNow = now.getHours();
+  const xNow = L + (hNow + now.getMinutes() / 60) / 24 * pw;
+  const nowIdx = Math.min(hNow, n - 1);
+  const nowMark =
+    `<rect x="${L}" y="${T}" width="${Math.max(0, xNow - L).toFixed(1)}" height="${ph}" fill="#14161b" fill-opacity="0.55"/>` +
+    `<line x1="${xNow.toFixed(1)}" y1="${T - 2}" x2="${xNow.toFixed(1)}" y2="${base}" stroke="#f0b429" stroke-width="1" stroke-dasharray="3 2"/>` +
+    `<circle cx="${x(nowIdx).toFixed(1)}" cy="${y(prices[nowIdx].price).toFixed(1)}" r="3.8" fill="#ffffff" stroke="#14161b" stroke-width="1.5"/>` +
+    `<text x="${xNow.toFixed(1)}" y="${T - 4}" text-anchor="${xNow > W - 36 ? 'end' : 'middle'}" fill="#f0b429" font-size="9" font-family="monospace">ahora</text>`;
+
+  el.innerHTML = `
+    <div class="daychart-head">
+      <div class="daychart-cap">Hoy, hora a hora (€/kWh)</div>
+      <div class="legend">
+        <span><i style="background:${TIER_COLORS.good}"></i>barata</span>
+        <span><i style="background:${TIER_COLORS.mid}"></i>media</span>
+        <span><i style="background:${TIER_COLORS.bad}"></i>cara</span>
+      </div>
+    </div>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Precio de la luz hora a hora durante todo el día">
+      <defs>
+        <linearGradient id="dayGrad" gradientUnits="userSpaceOnUse" x1="${L}" y1="0" x2="${W - R}" y2="0">${stops}</linearGradient>
+      </defs>
+      ${grid}
+      <path d="${areaPath}" fill="url(#dayGrad)" fill-opacity="0.14"/>
+      ${yAxis}
+      <polyline points="${linePts}" fill="none" stroke="url(#dayGrad)" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+      ${nowMark}
+    </svg>`;
 }
 
 function renderCurve(timeline, nowAbs){
@@ -262,6 +367,7 @@ async function load(){
     'Actualizado: ' + new Date(data.generated_at).toLocaleString('es-ES') + ` · próximas ${LOOKAHEAD_HOURS}h`;
 
   renderCurve(timeline, nowHour);
+  renderDayChart(data.today.prices, now);
 
   const freeBannerEl = document.getElementById('freeBanner');
   const todayFreeRanges = freeHourRanges(data.today?.prices);
@@ -332,8 +438,10 @@ async function load(){
     const start = fmtHour(overall.startAbs);
     const end = fmtHour(overall.endAbs);
     const startsNow = overall.startAbs === timeline[0].abs;
-    const savingPct = Math.round((rightNowAvg - overall.avg) / rightNowAvg * 100);
-    const worthWaiting = !startsNow && savingPct > 5;
+    // % de ahorro frente a ponerlo ya (null si el precio de ahora es 0 o negativo: no tiene sentido el %)
+    const pctVsNow = other => rightNowAvg > 0 ? Math.round((rightNowAvg - other) / rightNowAvg * 100) : null;
+    const savingPct = pctVsNow(overall.avg);
+    const worthWaiting = !startsNow && savingPct !== null && savingPct > 5;
 
     let secondHtml = '';
     if (second){
@@ -342,7 +450,16 @@ async function load(){
       const when2 = second.startAbs === timeline[0].abs
         ? 'ahora'
         : `${s2.label} – ${e2.label}${s2.day > 0 ? ' de mañana' : ''}`;
-      secondHtml = `<div class="second">2ª opción: <b>${when2}</b> · media ${second.avg.toFixed(3)} €/kWh</div>`;
+      let vsNow = '';
+      if (second.startAbs !== timeline[0].abs){
+        const p2 = pctVsNow(second.avg);
+        if (p2 !== null){
+          vsNow = p2 > 0 ? ` · <span class="save">~${p2}% más barato que ponerlo ya</span>`
+                : p2 < 0 ? ` · <span class="cost">~${Math.abs(p2)}% más caro que ponerlo ya</span>`
+                : ' · igual que ponerlo ya';
+        }
+      }
+      secondHtml = `<div class="second">2ª opción: <b>${when2}</b> · media ${second.avg.toFixed(3)} €/kWh${vsNow}</div>`;
     }
 
     let hintHtml = '';
