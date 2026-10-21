@@ -84,8 +84,7 @@
     font-size:13px; color:var(--text-dim);
   }
   .card .second b{ font-family:var(--mono); color:var(--text); font-weight:600; }
-  .card .second .save{ color:var(--good); font-weight:600; }
-  .card .second .cost{ color:var(--bad); font-weight:600; }
+  .card .second .pct{ color:var(--amber); }
 
   .daychart{ margin-top:12px; }
   .daychart-head{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:2px; }
@@ -164,15 +163,15 @@ function fmtHour(h){
   return { label: `${String(hh).padStart(2,'0')}:00`, day };
 }
 
-// Mejor ventana contigua de N horas. Si se pasa `exclude` ({startAbs, endAbs}),
-// se ignoran las ventanas que se solapen con ese tramo (para la 2ª opción).
-function bestWindow(timeline, hours, exclude){
+// Mejor ventana contigua de N horas. Si se pasa `skipStartAbs`, se ignora la ventana que
+// empieza a esa hora (así se obtiene la siguiente hora de inicio más barata, aunque se solape).
+function bestWindow(timeline, hours, skipStartAbs){
   if (timeline.length < hours) return null;
   let best = null;
   for (let start = 0; start <= timeline.length - hours; start++){
     const startAbs = timeline[start].abs;
     const endAbs = startAbs + hours;
-    if (exclude && startAbs < exclude.endAbs && endAbs > exclude.startAbs) continue;
+    if (skipStartAbs !== undefined && startAbs === skipStartAbs) continue;
     const slice = timeline.slice(start, start + hours);
     const avg = slice.reduce((s,p)=>s+p.price,0) / hours;
     if (!best || avg < best.avg) best = { startIdx: start, avg };
@@ -296,15 +295,32 @@ function renderCurve(timeline, nowAbs){
 
 const LOOKAHEAD_HOURS = 12;
 
+let lastData = null;   // última carga correcta, por si falla la red al volver a la app
+
 async function load(){
   let data;
+  let offline = false;
+  const statusEl = document.getElementById('tomorrowStatus');
   try{
     const res = await fetch('prices.json?t=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     data = await res.json();
+    lastData = data;
   }catch(e){
-    document.getElementById('cards').innerHTML = '<div class="error">No se han podido cargar los precios (prices.json). Comprueba que el workflow de GitHub Actions se ha ejecutado.</div>';
-    return;
+    if (lastData){
+      // Sin red: se repinta lo último cargado (la guarda de fechas sigue protegiendo de datos viejos).
+      data = lastData;
+      offline = true;
+    } else {
+      statusEl.style.display = 'none';
+      document.getElementById('cards').innerHTML = '<div class="error">No se han podido cargar los precios (prices.json). Comprueba que el workflow de GitHub Actions se ha ejecutado.</div>';
+      return;
+    }
   }
+
+  // Cada repintado parte del aviso en su estado inicial (si no, se queda oculto o en ámbar de una carga anterior).
+  statusEl.className = 'status';
+  statusEl.style.display = '';
 
   const now = new Date();
   const nowHour = now.getHours();
@@ -331,7 +347,10 @@ async function load(){
     document.getElementById('nowPrice').innerHTML = '— <small>€/kWh ahora</small>';
     document.getElementById('updated').textContent =
       'Última actualización: ' + new Date(data.generated_at).toLocaleString('es-ES');
-    document.getElementById('tomorrowStatus').style.display = 'none';
+    statusEl.style.display = 'none';
+    document.getElementById('curve').innerHTML = '';
+    document.getElementById('dayChart').innerHTML = '';
+    document.getElementById('freeBanner').innerHTML = '';
     document.getElementById('cards').innerHTML =
       `<div class="error"><b>⚠ Datos desactualizados.</b><br>Los precios guardados son del ${latestEs}, no de hoy (${todayStr.split('-').reverse().join('/')}). `
       + `No te fíes de esta página hasta que se actualice.<br><br>`
@@ -364,7 +383,8 @@ async function load(){
   document.getElementById('nowPrice').innerHTML =
     (nowEntry ? nowEntry.price.toFixed(3) : '—') + ' <small>€/kWh ahora</small>';
   document.getElementById('updated').textContent =
-    'Actualizado: ' + new Date(data.generated_at).toLocaleString('es-ES') + ` · próximas ${LOOKAHEAD_HOURS}h`;
+    'Actualizado: ' + new Date(data.generated_at).toLocaleString('es-ES') + ` · próximas ${LOOKAHEAD_HOURS}h` +
+    (offline ? ' · ⚠ sin conexión: datos de la última carga' : '');
 
   renderCurve(timeline, nowHour);
   renderDayChart(data.today.prices, now);
@@ -388,7 +408,6 @@ async function load(){
 
   freeBannerEl.innerHTML = bannerHtml ? `<p class="free-banner">${bannerHtml}</p>` : '';
 
-  const statusEl = document.getElementById('tomorrowStatus');
   const needsTomorrowData = cutoffAbs > 24;
   if (tomorrowAvailable){
     statusEl.textContent = `Precios de mañana (${data.tomorrow.date}) ya publicados — el cálculo cubre toda la ventana de las próximas ${LOOKAHEAD_HOURS}h.`;
@@ -429,15 +448,16 @@ async function load(){
     const overall = bestWindow(timeline, app.hours);
     if (!overall) continue;
 
-    // 2ª opción: la mejor ventana que no se solape con la primera.
-    const second = bestWindow(timeline, app.hours, overall);
-
     const rightNowSlice = timeline.slice(0, app.hours);
     const rightNowAvg = rightNowSlice.reduce((s,p)=>s+p.price,0) / app.hours;
 
     const start = fmtHour(overall.startAbs);
     const end = fmtHour(overall.endAbs);
     const startsNow = overall.startAbs === timeline[0].abs;
+
+    // 2ª opción: la siguiente hora de inicio más barata. Puede solaparse con la 1ª,
+    // y "ahora" compite como cualquier otra hora de inicio.
+    const second = bestWindow(timeline, app.hours, overall.startAbs);
     // % de ahorro frente a ponerlo ya (null si el precio de ahora es 0 o negativo: no tiene sentido el %)
     const pctVsNow = other => rightNowAvg > 0 ? Math.round((rightNowAvg - other) / rightNowAvg * 100) : null;
     const savingPct = pctVsNow(overall.avg);
@@ -454,9 +474,9 @@ async function load(){
       if (second.startAbs !== timeline[0].abs){
         const p2 = pctVsNow(second.avg);
         if (p2 !== null){
-          vsNow = p2 > 0 ? ` · <span class="save">~${p2}% más barato que ponerlo ya</span>`
-                : p2 < 0 ? ` · <span class="cost">~${Math.abs(p2)}% más caro que ponerlo ya</span>`
-                : ' · igual que ponerlo ya';
+          vsNow = p2 > 0 ? ` · <span class="pct">~${p2}% más barato que ponerlo ya</span>`
+                : p2 < 0 ? ` · <span class="pct">~${Math.abs(p2)}% más caro que ponerlo ya</span>`
+                : ' · <span class="pct">igual que ponerlo ya</span>';
         }
       }
       secondHtml = `<div class="second">2ª opción: <b>${when2}</b> · media ${second.avg.toFixed(3)} €/kWh${vsNow}</div>`;
@@ -490,7 +510,32 @@ async function load(){
   }
 }
 
-load();
+// ---- Refresco de datos ----
+// La webapp de la pantalla de inicio del iPhone a veces no recarga al volver a abrirla,
+// así que se vuelve a pedir el JSON en cada señal de que la página está de nuevo a la vista.
+let refreshing = false;
+
+async function refreshPrices(){
+  if (refreshing || document.visibilityState !== 'visible') return;
+  refreshing = true;
+  try {
+    await load();
+  } catch (e) {
+    console.error(e);
+  } finally {
+    refreshing = false;
+  }
+}
+
+refreshPrices();                                                   // carga inicial
+
+document.addEventListener('visibilitychange', () => {              // al volver desde otra app
+  if (document.visibilityState === 'visible') refreshPrices();
+});
+window.addEventListener('pageshow', () => refreshPrices());        // página restaurada o de la caché
+window.addEventListener('focus', () => refreshPrices());           // algunas webapps de iOS no lanzan visibilitychange
+window.addEventListener('online', () => refreshPrices());          // al recuperar la conexión
+setInterval(refreshPrices, 5 * 60 * 1000);                         // con la página abierta, cada 5 minutos
 </script>
 </body>
 </html>
