@@ -163,15 +163,15 @@ function fmtHour(h){
   return { label: `${String(hh).padStart(2,'0')}:00`, day };
 }
 
-// Mejor ventana contigua de N horas. Si se pasa `skipStartAbs`, se ignora la ventana que
-// empieza a esa hora (así se obtiene la siguiente hora de inicio más barata, aunque se solape).
-function bestWindow(timeline, hours, skipStartAbs){
+// Mejor ventana contigua de N horas. Si se pasa `accept`, solo se consideran las ventanas
+// cuya hora de inicio (startAbs) cumple esa condición.
+function bestWindow(timeline, hours, accept){
   if (timeline.length < hours) return null;
   let best = null;
   for (let start = 0; start <= timeline.length - hours; start++){
     const startAbs = timeline[start].abs;
     const endAbs = startAbs + hours;
-    if (skipStartAbs !== undefined && startAbs === skipStartAbs) continue;
+    if (accept && !accept(startAbs)) continue;
     const slice = timeline.slice(start, start + hours);
     const avg = slice.reduce((s,p)=>s+p.price,0) / hours;
     if (!best || avg < best.avg) best = { startIdx: start, avg };
@@ -294,6 +294,7 @@ function renderCurve(timeline, nowAbs){
 }
 
 const LOOKAHEAD_HOURS = 12;
+const SECOND_MIN_GAP_H = 2;   // la 2ª opción empieza al menos 2 h antes (o después) que la 1ª
 
 let lastData = null;   // última carga correcta, por si falla la red al volver a la app
 
@@ -455,9 +456,14 @@ async function load(){
     const end = fmtHour(overall.endAbs);
     const startsNow = overall.startAbs === timeline[0].abs;
 
-    // 2ª opción: la siguiente hora de inicio más barata. Puede solaparse con la 1ª,
-    // y "ahora" compite como cualquier otra hora de inicio.
-    const second = bestWindow(timeline, app.hours, overall.startAbs);
+    // 2ª opción (plan B), separada en el tiempo de la 1ª para que sea una alternativa de verdad:
+    // la más barata que empieza al menos SECOND_MIN_GAP_H horas ANTES que la 1ª (contando "ahora").
+    // Si la 1ª ya es "ahora" (o no hay nada con esa antelación), la más barata al menos esas horas DESPUÉS.
+    // "Ahora" siempre cuenta como plan B si la 1ª es más tarde, aunque falte menos de SECOND_MIN_GAP_H horas.
+    const nowAbs = timeline[0].abs;
+    let second = bestWindow(timeline, app.hours,
+      st => st <= overall.startAbs - SECOND_MIN_GAP_H || (st === nowAbs && st < overall.startAbs));
+    if (!second) second = bestWindow(timeline, app.hours, st => st >= overall.startAbs + SECOND_MIN_GAP_H);
     // % de ahorro frente a ponerlo ya (null si el precio de ahora es 0 o negativo: no tiene sentido el %)
     const pctVsNow = other => rightNowAvg > 0 ? Math.round((rightNowAvg - other) / rightNowAvg * 100) : null;
     const savingPct = pctVsNow(overall.avg);
@@ -467,19 +473,22 @@ async function load(){
     if (second){
       const s2 = fmtHour(second.startAbs);
       const e2 = fmtHour(second.endAbs);
-      const when2 = second.startAbs === timeline[0].abs
+      const isNow2 = second.startAbs === timeline[0].abs;
+      const when2 = isNow2
         ? 'ahora'
         : `${s2.label} – ${e2.label}${s2.day > 0 ? ' de mañana' : ''}`;
-      let vsNow = '';
-      if (second.startAbs !== timeline[0].abs){
+      const parts = [];
+      if (!isNow2){
         const p2 = pctVsNow(second.avg);
         if (p2 !== null){
-          vsNow = p2 > 0 ? ` · <span class="pct">~${p2}% más barato que ponerlo ya</span>`
-                : p2 < 0 ? ` · <span class="pct">~${Math.abs(p2)}% más caro que ponerlo ya</span>`
-                : ' · <span class="pct">igual que ponerlo ya</span>';
+          parts.push(p2 > 0 ? `~${p2}% más barato que ponerlo ya`
+                   : p2 < 0 ? `~${Math.abs(p2)}% más caro que ponerlo ya`
+                   : 'igual que ponerlo ya');
         }
       }
-      secondHtml = `<div class="second">2ª opción: <b>${when2}</b> · media ${second.avg.toFixed(3)} €/kWh${vsNow}</div>`;
+      const diff = second.avg - overall.avg;
+      parts.push(diff > 0.0005 ? `+${diff.toFixed(3)} €/kWh vs la 1ª` : 'igual que la 1ª');
+      secondHtml = `<div class="second">2ª opción: <b>${when2}</b> · media ${second.avg.toFixed(3)} €/kWh · <span class="pct">${parts.join(' · ')}</span></div>`;
     }
 
     let hintHtml = '';
