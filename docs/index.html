@@ -94,6 +94,20 @@
   .legend i{ width:8px; height:8px; border-radius:50%; display:inline-block; }
   .daychart svg{ display:block; width:100%; height:auto; }
 
+  [hidden]{ display:none !important; }
+  .tomorrow{ display:flex; flex-direction:column; gap:12px; border-top:1px solid var(--line); padding-top:16px; }
+  .tomorrow .daychart{ margin-top:0; }
+  .hourlist{ display:grid; grid-template-columns:1fr 1fr; gap:0 18px; }
+  .hl-col{ display:flex; flex-direction:column; }
+  .hl-row{ display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--line);
+           font-family:var(--mono); font-size:13px; }
+  .hl-row i{ width:8px; height:8px; border-radius:50%; flex:none; }
+  .hl-h{ color:var(--text-dim); flex:1; white-space:nowrap; }
+  .hl-p{ color:var(--text); }
+  .hl-row.min .hl-p, .hl-row.max .hl-p{ font-weight:700; }
+  .hl-tag{ width:24px; text-align:right; font-family:var(--sans); font-size:9px; font-weight:700;
+           letter-spacing:.04em; text-transform:uppercase; color:var(--text-dim); }
+
   footer{ margin-top:auto; padding-top:8px; font-size:11px; color:var(--text-dim); text-align:center; }
   .error{ color:var(--red); font-size:14px; padding:20px 4px; }
 </style>
@@ -115,6 +129,8 @@
   <section class="cards" id="cards">
     <div class="label" style="padding:10px 2px;color:var(--text-dim);">Cargando…</div>
   </section>
+
+  <section class="tomorrow" id="tomorrowSection" hidden></section>
 
   <footer>Datos: Red Eléctrica de España (REE) · se actualiza varias veces al día</footer>
 
@@ -178,7 +194,7 @@ function bestWindow(timeline, hours, accept){
   }
   if (!best) return null;
   const startAbs = timeline[best.startIdx].abs;
-  const endAbs = startAbs + hours;
+  const endAbs = timeline[best.startIdx + hours - 1].abs + 1;   // = startAbs + hours salvo en días de cambio de hora
   return { startAbs, endAbs, avg: best.avg };
 }
 
@@ -198,9 +214,9 @@ function priceTiers(prices){
 }
 
 // Línea continua con el precio de todo el día (00h-24h), coloreada por tramos de precio.
-function renderDayChart(prices, now){
-  const el = document.getElementById('dayChart');
-  if (!prices || prices.length < 2){ el.innerHTML = ''; return; }
+function dayChartHtml(prices, opts){
+  if (!prices || prices.length < 2) return '';
+  const now = opts.now || null;   // sin "now" no se pinta la marca de ahora (gráfico de mañana)
 
   const W = 340, H = 134, L = 42, R = 8, T = 14, B = 22;
   const pw = W - L - R, ph = H - T - B, n = prices.length;
@@ -223,10 +239,16 @@ function renderDayChart(prices, now){
   const linePts = pts.join(' ');
   const areaPath = `M${x(0).toFixed(1)},${base} L${pts.join(' L')} L${x(n - 1).toFixed(1)},${base} Z`;
 
-  // Marcas del eje horizontal: 00, 06, 12, 18, 24
+  // Marcas del eje horizontal: 00, 06, 12, 18, 24 (según la posición real de esa hora en el día,
+  // así también cuadra en los días de cambio de hora, con 23 o 25 horas)
+  const slotOf = h => {
+    if (h >= 24) return n;
+    const k = prices.findIndex(p => p.hour === h);
+    return k < 0 ? Math.round(h / 24 * n) : k;
+  };
   let grid = '';
   [0, 6, 12, 18, 24].forEach(h => {
-    const gx = (L + h / 24 * pw).toFixed(1);
+    const gx = (L + slotOf(h) / n * pw).toFixed(1);
     grid += `<line x1="${gx}" y1="${T}" x2="${gx}" y2="${base}" stroke="#2a2e37" stroke-width="1"/>`;
     grid += `<text x="${gx}" y="${H - 6}" text-anchor="middle" fill="#8b909c" font-size="10" font-family="monospace">${String(h).padStart(2, '0')}</text>`;
   });
@@ -242,35 +264,84 @@ function renderDayChart(prices, now){
                : '');
   }
 
-  // Ahora: horas pasadas atenuadas, línea vertical y punto sobre la curva
-  const hNow = now.getHours();
-  const xNow = L + (hNow + now.getMinutes() / 60) / 24 * pw;
-  const nowIdx = Math.min(hNow, n - 1);
-  const nowMark =
-    `<rect x="${L}" y="${T}" width="${Math.max(0, xNow - L).toFixed(1)}" height="${ph}" fill="#14161b" fill-opacity="0.55"/>` +
-    `<line x1="${xNow.toFixed(1)}" y1="${T - 2}" x2="${xNow.toFixed(1)}" y2="${base}" stroke="#f0b429" stroke-width="1" stroke-dasharray="3 2"/>` +
-    `<circle cx="${x(nowIdx).toFixed(1)}" cy="${y(prices[nowIdx].price).toFixed(1)}" r="3.8" fill="#ffffff" stroke="#14161b" stroke-width="1.5"/>` +
-    `<text x="${xNow.toFixed(1)}" y="${T - 4}" text-anchor="${xNow > W - 36 ? 'end' : 'middle'}" fill="#f0b429" font-size="9" font-family="monospace">ahora</text>`;
+  // Ahora: horas pasadas atenuadas, línea vertical y punto sobre la curva.
+  // La posición sale de las horas REALES transcurridas desde medianoche (en un día de 25 h, a las 18:30
+  // han pasado 19,5 h), no de la hora del reloj.
+  let nowMark = '';
+  if (now){
+    const d0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const elapsed = Math.max(0, (now - d0) / 3600000);
+    const nowIdx = Math.min(Math.floor(elapsed), n - 1);
+    const xNow = L + Math.min(elapsed, n) / n * pw;
+    nowMark =
+      `<rect x="${L}" y="${T}" width="${Math.max(0, xNow - L).toFixed(1)}" height="${ph}" fill="#14161b" fill-opacity="0.55"/>` +
+      `<line x1="${xNow.toFixed(1)}" y1="${T - 2}" x2="${xNow.toFixed(1)}" y2="${base}" stroke="#f0b429" stroke-width="1" stroke-dasharray="3 2"/>` +
+      `<circle cx="${x(nowIdx).toFixed(1)}" cy="${y(prices[nowIdx].price).toFixed(1)}" r="3.8" fill="#ffffff" stroke="#14161b" stroke-width="1.5"/>` +
+      `<text x="${xNow.toFixed(1)}" y="${T - 4}" text-anchor="${xNow > W - 36 ? 'end' : 'middle'}" fill="#f0b429" font-size="9" font-family="monospace">ahora</text>`;
+  }
 
-  el.innerHTML = `
+  return `
     <div class="daychart-head">
-      <div class="daychart-cap">Hoy, hora a hora (€/kWh)</div>
+      <div class="daychart-cap">${opts.caption}</div>
       <div class="legend">
         <span><i style="background:${TIER_COLORS.good}"></i>barata</span>
         <span><i style="background:${TIER_COLORS.mid}"></i>media</span>
         <span><i style="background:${TIER_COLORS.bad}"></i>cara</span>
       </div>
     </div>
-    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Precio de la luz hora a hora durante todo el día">
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${opts.caption}">
       <defs>
-        <linearGradient id="dayGrad" gradientUnits="userSpaceOnUse" x1="${L}" y1="0" x2="${W - R}" y2="0">${stops}</linearGradient>
+        <linearGradient id="dayGrad-${opts.uid}" gradientUnits="userSpaceOnUse" x1="${L}" y1="0" x2="${W - R}" y2="0">${stops}</linearGradient>
       </defs>
       ${grid}
-      <path d="${areaPath}" fill="url(#dayGrad)" fill-opacity="0.14"/>
+      <path d="${areaPath}" fill="url(#dayGrad-${opts.uid})" fill-opacity="0.14"/>
       ${yAxis}
-      <polyline points="${linePts}" fill="none" stroke="url(#dayGrad)" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+      <polyline points="${linePts}" fill="none" stroke="url(#dayGrad-${opts.uid})" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
       ${nowMark}
     </svg>`;
+}
+
+function renderDayChart(el, prices, opts){
+  el.innerHTML = dayChartHtml(prices, opts);
+}
+
+// Listado hora a hora en 2 columnas, con el punto del color del tramo y marcas de mín/máx.
+function hourListHtml(prices){
+  const n = prices.length;
+  const tiers = priceTiers(prices);
+  const vals = prices.map(p => p.price);
+  const hi = Math.max(...vals), lo = Math.min(...vals);
+  const flat = hi === lo;
+  const rowHtml = (p, i) => {
+    const h0 = String(p.hour).padStart(2, '0');
+    const h1 = String((p.hour + 1) % 24).padStart(2, '0');
+    const repeated = i > 0 && prices[i - 1].hour === p.hour ? '²' : '';   // la hora repetida del cambio de hora
+    const isMin = !flat && p.price === lo, isMax = !flat && p.price === hi;
+    return `<div class="hl-row${isMin ? ' min' : ''}${isMax ? ' max' : ''}">` +
+             `<i style="background:${TIER_COLORS[tiers[i]]}"></i>` +
+             `<span class="hl-h">${h0}–${h1}h${repeated}</span>` +
+             `<span class="hl-p">${p.price.toFixed(3)}</span>` +
+             `<span class="hl-tag">${isMin ? 'mín' : isMax ? 'máx' : ''}</span>` +
+           `</div>`;
+  };
+  const half = Math.ceil(n / 2);
+  const left = prices.slice(0, half).map((p, i) => rowHtml(p, i)).join('');
+  const right = prices.slice(half).map((p, i) => rowHtml(p, i + half)).join('');
+  return `<div class="hourlist"><div class="hl-col">${left}</div><div class="hl-col">${right}</div></div>`;
+}
+
+// Sección de mañana (abajo del todo): solo existe si ya hay precios publicados de mañana.
+// A medianoche "mañana" pasa a ser "hoy" y, hasta que salgan los nuevos, la sección desaparece sola.
+function renderTomorrowSection(prices, dateObj){
+  const sec = document.getElementById('tomorrowSection');
+  if (!prices || prices.length < 2){ sec.hidden = true; sec.innerHTML = ''; return; }
+  const wd = dateObj.toLocaleDateString('es-ES', { weekday: 'long' });
+  const dd = String(dateObj.getDate()).padStart(2, '0');
+  const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+  sec.hidden = false;
+  sec.innerHTML =
+    `<div class="daychart">${dayChartHtml(prices, { caption: `Mañana · ${wd} ${dd}/${mm} (€/kWh)`, now: null, uid: 'tomorrow' })}</div>` +
+    hourListHtml(prices);
 }
 
 function renderCurve(timeline, nowAbs){
@@ -351,6 +422,8 @@ async function load(){
     statusEl.style.display = 'none';
     document.getElementById('curve').innerHTML = '';
     document.getElementById('dayChart').innerHTML = '';
+    document.getElementById('tomorrowSection').hidden = true;
+    document.getElementById('tomorrowSection').innerHTML = '';
     document.getElementById('freeBanner').innerHTML = '';
     document.getElementById('cards').innerHTML =
       `<div class="error"><b>⚠ Datos desactualizados.</b><br>Los precios guardados son del ${latestEs}, no de hoy (${todayStr.split('-').reverse().join('/')}). `
@@ -388,7 +461,8 @@ async function load(){
     (offline ? ' · ⚠ sin conexión: datos de la última carga' : '');
 
   renderCurve(timeline, nowHour);
-  renderDayChart(data.today.prices, now);
+  renderDayChart(document.getElementById('dayChart'), data.today.prices, { caption: 'Hoy, hora a hora (€/kWh)', now, uid: 'today' });
+  renderTomorrowSection(data.tomorrow.prices, new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
 
   const freeBannerEl = document.getElementById('freeBanner');
   const todayFreeRanges = freeHourRanges(data.today?.prices);
