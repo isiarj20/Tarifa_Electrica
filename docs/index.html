@@ -306,7 +306,9 @@ function renderDayChart(el, prices, opts){
 }
 
 // Listado hora a hora en 2 columnas, con el punto del color del tramo y marcas de mín/máx.
-function hourListHtml(prices){
+// `fromIdx`: pinta solo las horas desde ese índice (las que quedan), pero los colores y el mín/máx
+// se calculan con el día completo.
+function hourListHtml(prices, fromIdx = 0){
   const n = prices.length;
   const tiers = priceTiers(prices);
   const vals = prices.map(p => p.price);
@@ -314,7 +316,7 @@ function hourListHtml(prices){
   const flat = hi === lo;
   const rowHtml = (p, i) => {
     const h0 = String(p.hour).padStart(2, '0');
-    const h1 = String((p.hour + 1) % 24).padStart(2, '0');
+    const h1 = p.hour + 1 === 24 ? '24' : String(p.hour + 1).padStart(2, '0');   // la última hora del día se lee "23–24h"
     const repeated = i > 0 && prices[i - 1].hour === p.hour ? '²' : '';   // la hora repetida del cambio de hora
     const isMin = !flat && p.price === lo, isMax = !flat && p.price === hi;
     return `<div class="hl-row${isMin ? ' min' : ''}${isMax ? ' max' : ''}">` +
@@ -324,24 +326,66 @@ function hourListHtml(prices){
              `<span class="hl-tag">${isMin ? 'mín' : isMax ? 'máx' : ''}</span>` +
            `</div>`;
   };
-  const half = Math.ceil(n / 2);
-  const left = prices.slice(0, half).map((p, i) => rowHtml(p, i)).join('');
-  const right = prices.slice(half).map((p, i) => rowHtml(p, i + half)).join('');
+  const idxs = [];
+  for (let i = Math.max(0, fromIdx); i < n; i++) idxs.push(i);
+  const half = Math.ceil(idxs.length / 2);
+  const left = idxs.slice(0, half).map(i => rowHtml(prices[i], i)).join('');
+  const right = idxs.slice(half).map(i => rowHtml(prices[i], i)).join('');
   return `<div class="hourlist"><div class="hl-col">${left}</div><div class="hl-col">${right}</div></div>`;
 }
 
-// Sección de mañana (abajo del todo): solo existe si ya hay precios publicados de mañana.
-// A medianoche "mañana" pasa a ser "hoy" y, hasta que salgan los nuevos, la sección desaparece sola.
-function renderTomorrowSection(prices, dateObj){
+function legendHtml(){
+  return `<div class="legend">
+    <span><i style="background:${TIER_COLORS.good}"></i>barata</span>
+    <span><i style="background:${TIER_COLORS.mid}"></i>media</span>
+    <span><i style="background:${TIER_COLORS.bad}"></i>cara</span>
+  </div>`;
+}
+
+// Sección de abajo del todo:
+//  - con los precios de mañana publicados (~20:30 hasta medianoche): gráfico de mañana + listado de mañana;
+//  - el resto del tiempo (desde las 00:00, cuando "mañana" ya es hoy): solo el listado de hoy,
+//    porque el gráfico de hoy ya está arriba. Así el listado no desaparece nunca.
+function renderBottomSection(data, now){
   const sec = document.getElementById('tomorrowSection');
-  if (!prices || prices.length < 2){ sec.hidden = true; sec.innerHTML = ''; return; }
-  const wd = dateObj.toLocaleDateString('es-ES', { weekday: 'long' });
-  const dd = String(dateObj.getDate()).padStart(2, '0');
-  const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
-  sec.hidden = false;
-  sec.innerHTML =
-    `<div class="daychart">${dayChartHtml(prices, { caption: `Mañana · ${wd} ${dd}/${mm} (€/kWh)`, now: null, uid: 'tomorrow' })}</div>` +
-    hourListHtml(prices);
+  const dayLabel = d => {
+    const wd = d.toLocaleDateString('es-ES', { weekday: 'long' });
+    return `${wd} ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+  };
+  const tomorrowPrices = data.tomorrow && data.tomorrow.prices;
+  const todayPrices = data.today && data.today.prices;
+
+  if (tomorrowPrices && tomorrowPrices.length >= 2){
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
+    // Mini listado con las horas que quedan de hoy (de la hora actual a las 24h), en dos columnas.
+    // Solo existe mientras haya precios de mañana publicados: a las 00:00 desaparece solo.
+    let miniHtml = '';
+    if (todayPrices && todayPrices.length >= 2){
+      const d0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const elapsed = Math.max(0, (now - d0) / 3600000);   // horas reales desde medianoche (vale también en días de 23/25 h)
+      const nowIdx = Math.min(Math.floor(elapsed), todayPrices.length - 1);
+      miniHtml =
+        `<div class="mini"><div class="daychart-head"><div class="daychart-cap">Hoy · lo que queda del día (€/kWh)</div></div>` +
+        hourListHtml(todayPrices, nowIdx) + `</div>`;
+    }
+
+    sec.hidden = false;
+    sec.innerHTML =
+      miniHtml +
+      `<div class="daychart">${dayChartHtml(tomorrowPrices, { caption: `Mañana · ${dayLabel(tomorrow)} (€/kWh)`, now: null, uid: 'tomorrow' })}</div>` +
+      hourListHtml(tomorrowPrices);
+    return;
+  }
+  if (todayPrices && todayPrices.length >= 2){
+    sec.hidden = false;
+    sec.innerHTML =
+      `<div class="daychart-head"><div class="daychart-cap">Hoy · ${dayLabel(now)} · precio por hora (€/kWh)</div>${legendHtml()}</div>` +
+      hourListHtml(todayPrices);
+    return;
+  }
+  sec.hidden = true;
+  sec.innerHTML = '';
 }
 
 function renderCurve(timeline, nowAbs){
@@ -462,7 +506,7 @@ async function load(){
 
   renderCurve(timeline, nowHour);
   renderDayChart(document.getElementById('dayChart'), data.today.prices, { caption: 'Hoy, hora a hora (€/kWh)', now, uid: 'today' });
-  renderTomorrowSection(data.tomorrow.prices, new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
+  renderBottomSection(data, now);
 
   const freeBannerEl = document.getElementById('freeBanner');
   const todayFreeRanges = freeHourRanges(data.today?.prices);
