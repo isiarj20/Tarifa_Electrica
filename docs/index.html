@@ -99,8 +99,12 @@
   .tomorrow .daychart{ margin-top:0; }
   .hourlist{ display:grid; grid-template-columns:1fr 1fr; gap:0 18px; }
   .hl-col{ display:flex; flex-direction:column; }
-  .hl-row{ display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--line);
-           font-family:var(--mono); font-size:13px; }
+  .hl-row{ position:relative; display:flex; align-items:center; gap:8px; padding:6px 8px; margin:0 -8px;
+           border:1px solid transparent; border-radius:10px; font-family:var(--mono); font-size:13px; }
+  .hl-row::after{ content:""; position:absolute; left:8px; right:8px; bottom:-1px; height:1px; background:var(--line); }
+  .hl-row.now{ border-color:var(--amber); background:var(--bg-card); }
+  .hl-row.now::after{ display:none; }
+  .hl-row.now .hl-h{ color:var(--text); }
   .hl-row i{ width:8px; height:8px; border-radius:50%; flex:none; }
   .hl-h{ color:var(--text-dim); flex:1; white-space:nowrap; }
   .hl-p{ color:var(--text); }
@@ -137,7 +141,7 @@
 <script>
 const APPLIANCES = [
   { key: 'lavaplatos', name: 'Lavaplatos', hours: 4 },
-  { key: 'lavadora',   name: 'Lavadora / Secadora (delicados)', hours: 1 },
+  { key: 'lavadora',   name: 'Lavadora + secadora delicados (1h30)', hours: 2 },
   { key: 'secadora',   name: 'Secadora (normal, 2h30)', hours: 3 },
 ];
 
@@ -308,7 +312,7 @@ function renderDayChart(el, prices, opts){
 // Listado hora a hora en 2 columnas, con el punto del color del tramo y marcas de mín/máx.
 // `fromIdx`: pinta solo las horas desde ese índice (las que quedan), pero los colores y el mín/máx
 // se calculan con el día completo.
-function hourListHtml(prices, fromIdx = 0){
+function hourListHtml(prices, fromIdx = 0, nowIdx = null){
   const n = prices.length;
   const tiers = priceTiers(prices);
   const vals = prices.map(p => p.price);
@@ -319,7 +323,7 @@ function hourListHtml(prices, fromIdx = 0){
     const h1 = p.hour + 1 === 24 ? '24' : String(p.hour + 1).padStart(2, '0');   // la última hora del día se lee "23–24h"
     const repeated = i > 0 && prices[i - 1].hour === p.hour ? '²' : '';   // la hora repetida del cambio de hora
     const isMin = !flat && p.price === lo, isMax = !flat && p.price === hi;
-    return `<div class="hl-row${isMin ? ' min' : ''}${isMax ? ' max' : ''}">` +
+    return `<div class="hl-row${isMin ? ' min' : ''}${isMax ? ' max' : ''}${i === nowIdx ? ' now' : ''}">` +
              `<i style="background:${TIER_COLORS[tiers[i]]}"></i>` +
              `<span class="hl-h">${h0}–${h1}h${repeated}</span>` +
              `<span class="hl-p">${p.price.toFixed(3)}</span>` +
@@ -355,6 +359,14 @@ function renderBottomSection(data, now){
   const tomorrowPrices = data.tomorrow && data.tomorrow.prices;
   const todayPrices = data.today && data.today.prices;
 
+  // Posición de la hora actual en el listado de hoy (horas reales desde medianoche: vale también en días de 23/25 h)
+  let nowIdx = null;
+  if (todayPrices && todayPrices.length >= 2){
+    const d0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const elapsed = Math.max(0, (now - d0) / 3600000);
+    nowIdx = Math.min(Math.floor(elapsed), todayPrices.length - 1);
+  }
+
   if (tomorrowPrices && tomorrowPrices.length >= 2){
     const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
 
@@ -362,12 +374,9 @@ function renderBottomSection(data, now){
     // Solo existe mientras haya precios de mañana publicados: a las 00:00 desaparece solo.
     let miniHtml = '';
     if (todayPrices && todayPrices.length >= 2){
-      const d0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const elapsed = Math.max(0, (now - d0) / 3600000);   // horas reales desde medianoche (vale también en días de 23/25 h)
-      const nowIdx = Math.min(Math.floor(elapsed), todayPrices.length - 1);
       miniHtml =
         `<div class="mini"><div class="daychart-head"><div class="daychart-cap">Hoy · lo que queda del día (€/kWh)</div></div>` +
-        hourListHtml(todayPrices, nowIdx) + `</div>`;
+        hourListHtml(todayPrices, nowIdx, nowIdx) + `</div>`;
     }
 
     sec.hidden = false;
@@ -381,7 +390,7 @@ function renderBottomSection(data, now){
     sec.hidden = false;
     sec.innerHTML =
       `<div class="daychart-head"><div class="daychart-cap">Hoy · ${dayLabel(now)} · precio por hora (€/kWh)</div>${legendHtml()}</div>` +
-      hourListHtml(todayPrices);
+      hourListHtml(todayPrices, 0, nowIdx);
     return;
   }
   sec.hidden = true;
