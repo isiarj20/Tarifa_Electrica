@@ -518,20 +518,27 @@ async function load(){
   renderBottomSection(data, now);
 
   const freeBannerEl = document.getElementById('freeBanner');
-  const todayFreeRanges = freeHourRanges(data.today?.prices);
+  const hasNegativeIn = (prices, ranges) => ranges.some(([s, e]) =>
+    (prices || []).some(p => p.hour >= s && p.hour < e && p.price < 0));
+
+  // Hoy: solo los tramos gratis que todavía no han terminado (los que ya pasaron se quitan del aviso).
+  const nowClock = now.getHours() + now.getMinutes() / 60;
+  const todayFreeRanges = freeHourRanges(data.today?.prices).filter(([, endHour]) => nowClock < endHour);
   const tomorrowFreeRanges = tomorrowAvailable ? freeHourRanges(data.tomorrow.prices) : [];
 
-  const todayHasNegative = todayFreeRanges.some(([s,e]) =>
-    (data.today?.prices || []).some(p => p.hour >= s && p.hour < e && p.price < 0));
+  const todayHasNegative = hasNegativeIn(data.today?.prices, todayFreeRanges);
+  const tomorrowHasNegative = hasNegativeIn(data.tomorrow?.prices, tomorrowFreeRanges);
 
   let bannerHtml = '';
   if (todayFreeRanges.length){
+    // Aún queda (o está en curso) algún tramo gratis hoy: hoy es la línea principal y mañana va debajo, en pequeño.
     bannerHtml += `⚡ Hoy entre las ${formatFreeRanges(todayFreeRanges)} la luz será gratis${todayHasNegative ? ' (¡e incluso te pagan!)' : ''}`;
     if (tomorrowFreeRanges.length){
       bannerHtml += `<span class="sub">Mañana también, entre las ${formatFreeRanges(tomorrowFreeRanges)}</span>`;
     }
   } else if (tomorrowFreeRanges.length){
-    bannerHtml += `⚡ Mañana entre las ${formatFreeRanges(tomorrowFreeRanges)} la luz será gratis`;
+    // Lo de hoy ya pasó (o no hubo): la línea principal pasa a ser la de mañana.
+    bannerHtml += `⚡ Mañana entre las ${formatFreeRanges(tomorrowFreeRanges)} la luz será gratis${tomorrowHasNegative ? ' (¡e incluso te pagan!)' : ''}`;
   }
 
   freeBannerEl.innerHTML = bannerHtml ? `<p class="free-banner">${bannerHtml}</p>` : '';
