@@ -468,7 +468,16 @@ async function load(){
   if (!byDate[todayStr]){
     const known = Object.keys(byDate).sort();
     const latest = known.length ? known[known.length - 1] : null;
-    const latestEs = latest ? latest.split('-').reverse().join('/') : 'ninguna fecha';
+    const todayEs = todayStr.split('-').reverse().join('/');
+    const whatWeHave = latest
+      ? `Los precios guardados son del ${latest.split('-').reverse().join('/')}, no de hoy (${todayEs}).`
+      : `El fichero de precios no contiene ningún precio todavía (hoy es ${todayEs}).`;
+    // Motivo de la última descarga fallida, si el script lo ha dejado anotado en el JSON
+    const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const reasons = [...new Set(Object.values(data.errors || {}))];
+    const reasonHtml = reasons.length
+      ? `<br><br><span style="color:var(--text-dim);">Motivo de la última descarga: ${reasons.map(esc).join(' · ')}</span>`
+      : '';
     document.getElementById('nowPrice').innerHTML = '— <small>€/kWh ahora</small>';
     document.getElementById('updated').textContent =
       'Última actualización: ' + new Date(data.generated_at).toLocaleString('es-ES');
@@ -479,8 +488,8 @@ async function load(){
     document.getElementById('tomorrowSection').innerHTML = '';
     document.getElementById('freeBanner').innerHTML = '';
     document.getElementById('cards').innerHTML =
-      `<div class="error"><b>⚠ Datos desactualizados.</b><br>Los precios guardados son del ${latestEs}, no de hoy (${todayStr.split('-').reverse().join('/')}). `
-      + `No te fíes de esta página hasta que se actualice.<br><br>`
+      `<div class="error"><b>⚠ Datos desactualizados.</b><br>${whatWeHave} `
+      + `No te fíes de esta página hasta que se actualice.${reasonHtml}<br><br>`
       + `Comprueba que el workflow de GitHub Actions se ha ejecutado y que GitHub Pages sirve la misma carpeta donde se guarda prices.json.</div>`;
     return;
   }
