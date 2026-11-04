@@ -1,109 +1,11 @@
 {
   "generated_at": "2026-11-04T21:13:02.555135+01:00",
-  "last_attempt_at": "2026-11-04T21:13:02.555135+01:00",
-  "errors": {},
-  "today": {
-    "date": "2026-11-04",
-    "prices": [
-      {
-        "hour": 0,
-        "price": 0.1886
-      },
-      {
-        "hour": 1,
-        "price": 0.1881
-      },
-      {
-        "hour": 2,
-        "price": 0.1776
-      },
-      {
-        "hour": 3,
-        "price": 0.1764
-      },
-      {
-        "hour": 4,
-        "price": 0.1799
-      },
-      {
-        "hour": 5,
-        "price": 0.1983
-      },
-      {
-        "hour": 6,
-        "price": 0.235
-      },
-      {
-        "hour": 7,
-        "price": 0.2979
-      },
-      {
-        "hour": 8,
-        "price": 0.3215
-      },
-      {
-        "hour": 9,
-        "price": 0.2551
-      },
-      {
-        "hour": 10,
-        "price": 0.2456
-      },
-      {
-        "hour": 11,
-        "price": 0.2288
-      },
-      {
-        "hour": 12,
-        "price": 0.2272
-      },
-      {
-        "hour": 13,
-        "price": 0.2276
-      },
-      {
-        "hour": 14,
-        "price": 0.1617
-      },
-      {
-        "hour": 15,
-        "price": 0.1709
-      },
-      {
-        "hour": 16,
-        "price": 0.2438
-      },
-      {
-        "hour": 17,
-        "price": 0.2899
-      },
-      {
-        "hour": 18,
-        "price": 0.3864
-      },
-      {
-        "hour": 19,
-        "price": 0.3837
-      },
-      {
-        "hour": 20,
-        "price": 0.3698
-      },
-      {
-        "hour": 21,
-        "price": 0.3627
-      },
-      {
-        "hour": 22,
-        "price": 0.2848
-      },
-      {
-        "hour": 23,
-        "price": 0.2793
-      }
-    ]
+  "last_attempt_at": "2026-11-05T00:52:52.580175+01:00",
+  "errors": {
+    "2026-11-05": "REE no responde tras 3 intentos (The read operation timed out) — se conservan los últimos precios guardados de ese día",
+    "2026-11-06": "REE no responde tras 3 intentos (The read operation timed out)"
   },
-  "tomorrow": {
+  "today": {
     "date": "2026-11-05",
     "prices": [
       {
@@ -203,5 +105,9 @@
         "price": 0.2518
       }
     ]
+  },
+  "tomorrow": {
+    "date": "2026-11-06",
+    "prices": null
   }
 }
