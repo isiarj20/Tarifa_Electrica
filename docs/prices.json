@@ -1,9 +1,8 @@
 {
-  "generated_at": "2026-11-04T21:13:02.555135+01:00",
-  "last_attempt_at": "2026-11-05T00:52:52.580175+01:00",
+  "generated_at": "2026-11-05T01:22:14.555594+01:00",
+  "last_attempt_at": "2026-11-05T01:22:14.555594+01:00",
   "errors": {
-    "2026-11-05": "REE no responde tras 3 intentos (The read operation timed out) — se conservan los últimos precios guardados de ese día",
-    "2026-11-06": "REE no responde tras 3 intentos (The read operation timed out)"
+    "2026-11-06": "REE no responde tras 3 intentos (HTTP Error 502: Bad Gateway)"
   },
   "today": {
     "date": "2026-11-05",
