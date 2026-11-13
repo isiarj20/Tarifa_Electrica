@@ -1,109 +1,10 @@
 {
-  "generated_at": "2026-11-13T21:15:07.095427+01:00",
-  "last_attempt_at": "2026-11-13T21:15:07.095427+01:00",
-  "errors": {},
-  "today": {
-    "date": "2026-11-13",
-    "prices": [
-      {
-        "hour": 0,
-        "price": 0.1591
-      },
-      {
-        "hour": 1,
-        "price": 0.1506
-      },
-      {
-        "hour": 2,
-        "price": 0.1358
-      },
-      {
-        "hour": 3,
-        "price": 0.1327
-      },
-      {
-        "hour": 4,
-        "price": 0.1328
-      },
-      {
-        "hour": 5,
-        "price": 0.1468
-      },
-      {
-        "hour": 6,
-        "price": 0.1809
-      },
-      {
-        "hour": 7,
-        "price": 0.2407
-      },
-      {
-        "hour": 8,
-        "price": 0.2743
-      },
-      {
-        "hour": 9,
-        "price": 0.2138
-      },
-      {
-        "hour": 10,
-        "price": 0.2261
-      },
-      {
-        "hour": 11,
-        "price": 0.2021
-      },
-      {
-        "hour": 12,
-        "price": 0.1952
-      },
-      {
-        "hour": 13,
-        "price": 0.1949
-      },
-      {
-        "hour": 14,
-        "price": 0.1305
-      },
-      {
-        "hour": 15,
-        "price": 0.1585
-      },
-      {
-        "hour": 16,
-        "price": 0.2286
-      },
-      {
-        "hour": 17,
-        "price": 0.2798
-      },
-      {
-        "hour": 18,
-        "price": 0.4046
-      },
-      {
-        "hour": 19,
-        "price": 0.3932
-      },
-      {
-        "hour": 20,
-        "price": 0.3714
-      },
-      {
-        "hour": 21,
-        "price": 0.349
-      },
-      {
-        "hour": 22,
-        "price": 0.2498
-      },
-      {
-        "hour": 23,
-        "price": 0.2305
-      }
-    ]
+  "generated_at": "2026-11-14T00:48:02.876831+01:00",
+  "last_attempt_at": "2026-11-14T00:48:02.876831+01:00",
+  "errors": {
+    "2026-11-15": "REE no responde tras 3 intentos (HTTP Error 502: Bad Gateway)"
   },
-  "tomorrow": {
+  "today": {
     "date": "2026-11-14",
     "prices": [
       {
@@ -203,5 +104,9 @@
         "price": 0.2026
       }
     ]
+  },
+  "tomorrow": {
+    "date": "2026-11-15",
+    "prices": null
   }
 }
