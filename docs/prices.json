@@ -1,9 +1,7 @@
 {
-  "generated_at": "2026-11-17T17:45:48.257155+01:00",
-  "last_attempt_at": "2026-11-17T17:45:48.257155+01:00",
-  "errors": {
-    "2026-11-18": "REE no responde tras 3 intentos (HTTP Error 502: Bad Gateway)"
-  },
+  "generated_at": "2026-11-17T20:35:26.800176+01:00",
+  "last_attempt_at": "2026-11-17T20:35:26.800176+01:00",
+  "errors": {},
   "today": {
     "date": "2026-11-17",
     "prices": [
@@ -107,6 +105,103 @@
   },
   "tomorrow": {
     "date": "2026-11-18",
-    "prices": null
+    "prices": [
+      {
+        "hour": 0,
+        "price": 0.0795
+      },
+      {
+        "hour": 1,
+        "price": 0.075
+      },
+      {
+        "hour": 2,
+        "price": 0.075
+      },
+      {
+        "hour": 3,
+        "price": 0.0752
+      },
+      {
+        "hour": 4,
+        "price": 0.0751
+      },
+      {
+        "hour": 5,
+        "price": 0.074
+      },
+      {
+        "hour": 6,
+        "price": 0.1002
+      },
+      {
+        "hour": 7,
+        "price": 0.137
+      },
+      {
+        "hour": 8,
+        "price": 0.1648
+      },
+      {
+        "hour": 9,
+        "price": 0.1551
+      },
+      {
+        "hour": 10,
+        "price": 0.1971
+      },
+      {
+        "hour": 11,
+        "price": 0.1841
+      },
+      {
+        "hour": 12,
+        "price": 0.181
+      },
+      {
+        "hour": 13,
+        "price": 0.1717
+      },
+      {
+        "hour": 14,
+        "price": 0.1223
+      },
+      {
+        "hour": 15,
+        "price": 0.1457
+      },
+      {
+        "hour": 16,
+        "price": 0.1764
+      },
+      {
+        "hour": 17,
+        "price": 0.2146
+      },
+      {
+        "hour": 18,
+        "price": 0.2907
+      },
+      {
+        "hour": 19,
+        "price": 0.2938
+      },
+      {
+        "hour": 20,
+        "price": 0.3182
+      },
+      {
+        "hour": 21,
+        "price": 0.3035
+      },
+      {
+        "hour": 22,
+        "price": 0.1969
+      },
+      {
+        "hour": 23,
+        "price": 0.1651
+      }
+    ]
   }
 }
