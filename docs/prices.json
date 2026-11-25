@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-11-25T03:43:52.930282+01:00",
-  "last_attempt_at": "2026-11-25T03:43:52.930282+01:00",
+  "generated_at": "2026-11-25T04:01:46.948966+01:00",
+  "last_attempt_at": "2026-11-25T04:01:46.948966+01:00",
   "errors": {
     "2026-11-26": "REE no responde tras 3 intentos (HTTP Error 502: Bad Gateway)"
   },
