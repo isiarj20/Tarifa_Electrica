@@ -641,6 +641,11 @@ async function load(){
       hintHtml = provisional
         ? '<div class="hint" style="color:var(--text-dim);">Con lo que se conoce hasta medianoche, ponlo ya. Puede cambiar cuando salgan los precios de mañana.</div>'
         : `<div class="hint" style="color:var(--text-dim);">Ya es la mejor opción dentro de las próximas ${LOOKAHEAD_HOURS}h — ponlo ya</div>`;
+    } else {
+      // La mejor franja es más tarde, pero esperar ahorra poco (≤5%): se dice explícitamente, sin marco.
+      hintHtml = savingPct === null
+        ? '<div class="hint" style="color:var(--text-dim);">Ahora ya sale gratis: ponlo cuando te venga bien</div>'
+        : `<div class="hint" style="color:var(--text-dim);">Ahora cuesta casi lo mismo: esperar solo ahorra ~${savingPct}%</div>`;
     }
     const provisionalHtml = (provisional && !startsNow)
       ? '<div class="hint" style="color:var(--text-dim);">Provisional: aún no hay precios de mañana.</div>'
